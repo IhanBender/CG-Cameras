@@ -4,8 +4,58 @@
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/noise.hpp>
+#include <queue>
 
 #include <vector>
+
+struct lookAt {
+    glm::vec3 InicialPosition;
+    glm::vec3 Position;
+    float InicialTime;
+    float FinalTime;
+    bool Ended;
+};
+
+struct translation {
+    glm::vec3 InicialPosition;
+    glm::vec3 Position;
+    float InicialTime;
+    float FinalTime;
+    bool Ended;
+};
+
+struct rotationRP {
+    glm::vec3 Point;
+    float InicialAngle;
+    float Angle;
+    float InicialTime;
+    float FinalTime;
+    bool Ended;
+};
+
+struct rotationRA {
+    glm::vec3 Axis;
+    float InicialAngle;
+    float Angle;
+    float InicialTime;
+    float FinalTime;
+    bool Ended;
+};
+
+struct bSpline {
+    glm::vec3 P0, P1, P2, P3;
+    float InicialTime;
+    float FinalTime;
+    bool Ended;
+};
+
+struct bezier {
+    glm::vec3 P0, P1, P2, P3;
+    float InicialTime;
+    float FinalTime;
+    bool Ended;
+};
 
 // Defines several possible options for camera movement. Used as abstraction to stay away from window-system specific input methods
 enum Camera_Movement {
@@ -44,9 +94,34 @@ public:
     float Near;
     float Far;
 
+    bool noiseActive;
+
+    std::queue<lookAt> lookAtQueue;
+    std::queue<translation> translationQueue;
+    std::queue<rotationRP> rotationRPQueue;
+    std::queue<rotationRA> rotationRAQueue;
+    std::queue<bSpline> bSplineQueue;
+    std::queue<bezier> bezierQueue;
+
+    lookAt currLookAt;
+    translation currTranslation;
+    rotationRP currRP;
+    rotationRA currRA;
+    bSpline currBSpline;
+    bezier currBezier;
+
+
     // Constructor with vectors
     Camera(glm::vec3 position = glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f), float yaw = YAW, float pitch = PITCH, float zoom = ZOOM, float near = NEAR, float far = FAR) : MovementSpeed(SPEED), MouseSensitivity(SENSITIVITY)
     {
+        currLookAt.Ended = true;
+        currTranslation.Ended = true;
+        currRP.Ended = true;
+        currRA.Ended = true;
+        currBSpline.Ended = true;
+        currBezier.Ended = true;
+        noiseActive = false;
+
         Near = near;
         Far = far;
         Zoom = zoom;
@@ -54,12 +129,77 @@ public:
         WorldUp = up;
         Yaw = yaw;
         Pitch = pitch;
+
         updateCameraVectors();
+    }
+
+    void LookAt(glm::vec3 P, float time){
+        lookAt l;
+        l.Position = P;
+        l.FinalTime = time;
+        l.Ended = false;
+
+        lookAtQueue.push(l);
+    }
+
+    void Translate(glm::vec3 P, float time){
+        translation t;
+        t.Position = P;
+        t.FinalTime = time;
+        t.Ended = false;
+
+        translationQueue.push(t);
+    }
+
+    void rotateRP(glm::vec3 P, float angle, float time){
+        rotationRP r;
+        r.Point = P;
+        r.Angle = angle;
+        r.FinalTime = time;
+        r.Ended = false;
+
+        rotationRPQueue.push(r);
+    
+    }
+    
+    void rotateRA(glm::vec3 axis, float angle, float time){
+        rotationRA r;
+        r.Axis = axis;
+        r.Angle = angle;
+        r.FinalTime = time;
+        r.Ended = false;
+
+        rotationRAQueue.push(r);
+    }
+
+    void bSplinePath(glm::vec3 P0, glm::vec3 P1, glm::vec3 P2, glm::vec3 P3, float time){
+        bSpline b;
+        b.P0 = P0;
+        b.P1 = P1;
+        b.P2 = P2;
+        b.P3 = P3;
+        b.FinalTime = time;
+        b.Ended = false;
+
+        bSplineQueue.push(b);
+    }
+
+    void bezierPath(glm::vec3 P0, glm::vec3 P1, glm::vec3 P2, glm::vec3 P3, float time){
+        bezier b;
+        b.P0 = P0;
+        b.P1 = P1;
+        b.P2 = P2;
+        b.P3 = P3;
+        b.FinalTime = time;
+        b.Ended = false;
+
+        bezierQueue.push(b);
     }
 
     // Returns the view matrix calculated using Euler Angles and the LookAt Matrix
     glm::mat4 GetViewMatrix()
     {
+        ProcessTransformations();
         return glm::lookAt(Position, Position + Front, Up);
     }
 
@@ -117,6 +257,22 @@ public:
     }
 
 private:
+
+    void ProcessTransformations(){
+        ProcessBSPline();
+        ProcessBezier();
+        processTranslation();
+
+        ProcessRP();
+        ProcessRA();
+
+        ProcessLookAt();
+    }
+
+    void ProcessLookAt(){
+        
+    }
+
     // Calculates the front vector from the Camera's (updated) Euler Angles
     void updateCameraVectors()
     {

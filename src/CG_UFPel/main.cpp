@@ -18,6 +18,7 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow *window);
 void printCameraData();
 void changeCamera();
+void createCamera();
 
 // settings
 const unsigned int SCR_WIDTH = 800;
@@ -28,7 +29,7 @@ vector<Camera> cameras;
 unsigned int currentCamera = 0;
 unsigned int numberOfCameras = 1;
 // default camera configuration values
-glm::vec3 position = glm::vec3(0,3,3);
+glm::vec3 position = glm::vec3(0,20,3);
 glm::vec3 up = glm::vec3(0,1,0);
 glm::vec3 front = glm::vec3(0,0,-1);
 float zoom = 45;
@@ -36,6 +37,9 @@ float yaw = -90.0f;
 float pitch = 0.0f;
 float near = 0.01f;
 float far = 100.0f;
+
+// camera controls
+bool tab = false, enter = false;
 
 Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
 float lastX = SCR_WIDTH / 2.0f;
@@ -154,7 +158,7 @@ int main()
 
 
 void printCameraData(){
-    printf("----------------------- New camera data -----------------------\n");
+    printf("------------------- New camera data -------------------\n");
     printf("| Position Value: (%f %f %f)\n", position.x, position.y, position.z);
     printf("| Up Vector Value: (%f %f %f)\n", up.x, up.y, up.z);
     printf("| Front Vector Value: (%f %f %f)\n", front.x, front.y, front.z);
@@ -164,7 +168,7 @@ void printCameraData(){
     printf("| Yaw: %f\n", yaw);
     printf("| Pitch: %f\n", pitch);
 
-    printf("\n----------------------- Current camera data -----------------------\n");
+    printf("\n----------------- Current camera data ----------------");
     printf("| Number of Cameras: %u\n", numberOfCameras);
     printf("| Current camera id: %u\n", currentCamera);
     printf("| Position Value: (%f %f %f)\n", cameras[currentCamera].Position.x, cameras[currentCamera].Position.y, cameras[currentCamera].Position.z);
@@ -175,14 +179,20 @@ void printCameraData(){
     printf("| Far clipping: %f\n", cameras[currentCamera].Far);
     printf("| Yaw: %f\n", cameras[currentCamera].Yaw);
     printf("| Pitch: %f\n", cameras[currentCamera].Pitch);
-    printf("---------------------------------------------------------------\n");
+    printf("-------------------------------------------------------\n");
 }
 
 void changeCamera() {
     if(numberOfCameras - 1 == currentCamera)
         currentCamera = 0;
-    
-    ++currentCamera;
+    else
+        ++currentCamera;
+}
+
+void createCamera() {
+    Camera newCamera = Camera(position, up, yaw, pitch, zoom, near, far);
+    cameras.push_back(newCamera);
+    ++numberOfCameras;
 }
 
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
@@ -192,14 +202,30 @@ void processInput(GLFWwindow *window)
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
+    // Changing camera
+    if (glfwGetKey(window, GLFW_KEY_TAB) == GLFW_PRESS)
+        tab = true;
+    if (glfwGetKey(window, GLFW_KEY_TAB) == GLFW_RELEASE && tab){
+        tab = false;
+        changeCamera();
+    }
+
+    // Creating camera
+    if (glfwGetKey(window, GLFW_KEY_ENTER) == GLFW_PRESS)
+        enter = true;
+    if (glfwGetKey(window, GLFW_KEY_ENTER) == GLFW_RELEASE && enter){
+        enter = false;
+        createCamera();
+    }
+
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        camera.ProcessKeyboard(FORWARD, deltaTime);
+        cameras[currentCamera].ProcessKeyboard(FORWARD, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        camera.ProcessKeyboard(BACKWARD, deltaTime);
+        cameras[currentCamera].ProcessKeyboard(BACKWARD, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        camera.ProcessKeyboard(LEFT, deltaTime);
+        cameras[currentCamera].ProcessKeyboard(LEFT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        camera.ProcessKeyboard(RIGHT, deltaTime);
+        cameras[currentCamera].ProcessKeyboard(RIGHT, deltaTime);
 }
 
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes
@@ -228,12 +254,12 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
     lastX = xpos;
     lastY = ypos;
 
-    camera.ProcessMouseMovement(xoffset, yoffset);
+    cameras[currentCamera].ProcessMouseMovement(xoffset, yoffset);
 }
 
 // glfw: whenever the mouse scroll wheel scrolls, this callback is called
 // ----------------------------------------------------------------------
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
-    camera.ProcessMouseScroll(yoffset);
+    cameras[currentCamera].ProcessMouseScroll(yoffset);
 }
