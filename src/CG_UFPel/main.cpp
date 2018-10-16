@@ -46,6 +46,9 @@ float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 bool firstMouse = true;
 
+bool obj1 = false, obj2 = false, obj3 = false, obj4 = false, obj5 = false;
+bool t1 = false, t2 = false, t3 = false;
+
 // timing
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
@@ -98,8 +101,11 @@ int main()
 
     // load models
     // -----------
-    Model city(FileSystem::getPath("resources/objects/city/Castelia City.obj"));
-
+    //Model city(FileSystem::getPath("resources/objects/city/Castelia City.obj"));
+    Model rock(FileSystem::getPath("resources/objects/rock/rock.obj"));
+    Model planet(FileSystem::getPath("resources/objects/planet/planet.obj"));
+    Model cyborg(FileSystem::getPath("resources/objects/cyborg/cyborg.obj"));
+    
     // creates a default camera at 0,5,3
     Camera newCamera = Camera(glm::vec3(0, 5, 3));
     cameras.push_back(newCamera);
@@ -138,10 +144,30 @@ int main()
 
         // render the loaded model
         glm::mat4 model = glm::mat4(1);
-        model = glm::translate(model, glm::vec3(0.0f, -1.75f, 0.0f)); // translate it down so it's at the center of the scene
+        /*model = glm::translate(model, glm::vec3(0.0f, -1.75f, 0.0f)); // translate it down so it's at the center of the scene
         model = glm::scale(model, glm::vec3(0.002f, 0.002f, 0.002f));	// it's a bit too big for our scene, so scale it down
         ourShader.setMat4("model", model);
         city.Draw(ourShader);
+        */
+
+        model = glm::mat4(1);
+        model = glm::translate(model, glm::vec3(0, 10, -10));
+        model = glm::scale(model, glm::vec3(0.2));
+        ourShader.setMat4("model", model);
+        rock.Draw(ourShader);
+
+        model = glm::mat4(1);
+        model = glm::translate(model, glm::vec3(0, 10, 10));
+        model = glm::scale(model, glm::vec3(0.2));
+        ourShader.setMat4("model", model);
+        planet.Draw(ourShader);
+
+        model = glm::mat4(1);
+        model = glm::translate(model, glm::vec3(5, 5, 5));
+        model = glm::scale(model, glm::vec3(0.2));
+        ourShader.setMat4("model", model);
+        cyborg.Draw(ourShader);
+
 
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
@@ -158,7 +184,7 @@ int main()
 
 
 void printCameraData(){
-    printf("------------------- New camera data -------------------\n");
+    printf("------------------- New camera data ------------------\n");
     printf("| Position Value: (%f %f %f)\n", position.x, position.y, position.z);
     printf("| Up Vector Value: (%f %f %f)\n", up.x, up.y, up.z);
     printf("| Front Vector Value: (%f %f %f)\n", front.x, front.y, front.z);
@@ -168,7 +194,7 @@ void printCameraData(){
     printf("| Yaw: %f\n", yaw);
     printf("| Pitch: %f\n", pitch);
 
-    printf("\n----------------- Current camera data ----------------");
+    printf("\n----------------- Current camera data ---------------\n");
     printf("| Number of Cameras: %u\n", numberOfCameras);
     printf("| Current camera id: %u\n", currentCamera);
     printf("| Position Value: (%f %f %f)\n", cameras[currentCamera].Position.x, cameras[currentCamera].Position.y, cameras[currentCamera].Position.z);
@@ -179,7 +205,7 @@ void printCameraData(){
     printf("| Far clipping: %f\n", cameras[currentCamera].Far);
     printf("| Yaw: %f\n", cameras[currentCamera].Yaw);
     printf("| Pitch: %f\n", cameras[currentCamera].Pitch);
-    printf("-------------------------------------------------------\n");
+    printf("-----------------------------------------------------\n");
 }
 
 void changeCamera() {
@@ -218,6 +244,24 @@ void processInput(GLFWwindow *window)
         createCamera();
     }
 
+    // LookAt
+    if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)   obj1 = true;
+    if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)   obj2 = true;
+    if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS)   obj3 = true;
+    //if (glfwGetKey(window, GLFW_KEY_4) == GLFW_PRESS)   obj4 = true;
+    //if (glfwGetKey(window, GLFW_KEY_5) == GLFW_PRESS)   obj5 = true;
+    if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_RELEASE && obj1){
+        cameras[currentCamera].LookAt(glm::vec3(0, 10, -10), 0);
+        obj1 = false;
+    }
+    if (glfwGetKey(window, GLFW_KEY_E) == GLFW_RELEASE && obj2){
+        cameras[currentCamera].LookAt(glm::vec3(0, 10, 10), 5);
+        obj2 = false;
+    }
+    if (glfwGetKey(window, GLFW_KEY_R) == GLFW_RELEASE && obj3){
+        cameras[currentCamera].LookAt(glm::vec3(5, 5, 5), 8);
+        obj3 = false;
+    }
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
         cameras[currentCamera].ProcessKeyboard(FORWARD, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
@@ -226,6 +270,36 @@ void processInput(GLFWwindow *window)
         cameras[currentCamera].ProcessKeyboard(LEFT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
         cameras[currentCamera].ProcessKeyboard(RIGHT, deltaTime);
+
+    // Translate
+    if (glfwGetKey(window, GLFW_KEY_T) == GLFW_PRESS)   t1 = true;
+    if (glfwGetKey(window, GLFW_KEY_Y) == GLFW_PRESS)   t2 = true;
+    if (glfwGetKey(window, GLFW_KEY_U) == GLFW_PRESS)   t3 = true;
+    if (glfwGetKey(window, GLFW_KEY_T) == GLFW_RELEASE && t1){
+        cameras[currentCamera].Translate(glm::vec3(0, 10, -10), 0);
+        t1 = false;
+    }
+    if (glfwGetKey(window, GLFW_KEY_Y) == GLFW_RELEASE && t2){
+        cameras[currentCamera].Translate(glm::vec3(0, 10, 10), 5);
+        t2 = false;
+    }
+    if (glfwGetKey(window, GLFW_KEY_U) == GLFW_RELEASE && t3){
+        cameras[currentCamera].Translate(glm::vec3(5, 5, 5), 8);
+        t3 = false;
+    }
+
+
+    // Camera movement
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        cameras[currentCamera].ProcessKeyboard(FORWARD, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        cameras[currentCamera].ProcessKeyboard(BACKWARD, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        cameras[currentCamera].ProcessKeyboard(LEFT, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        cameras[currentCamera].ProcessKeyboard(RIGHT, deltaTime);
+
+
 }
 
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes

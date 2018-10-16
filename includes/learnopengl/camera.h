@@ -4,16 +4,20 @@
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/vector_angle.hpp>
 #include <glm/gtc/noise.hpp>
 #include <queue>
 
 #include <vector>
 
 struct lookAt {
-    glm::vec3 InicialPosition;
     glm::vec3 Position;
     float InicialTime;
     float FinalTime;
+    float InicialPitch;
+    float InicialYaw;
+    float FinalPitch;
+    float FinalYaw;
     bool Ended;
 };
 
@@ -95,6 +99,7 @@ public:
     float Far;
 
     bool noiseActive;
+    float currTime;
 
     std::queue<lookAt> lookAtQueue;
     std::queue<translation> translationQueue;
@@ -196,9 +201,18 @@ public:
         bezierQueue.push(b);
     }
 
+    void activateNoise(){
+        noiseActive = true;
+    }
+
+    void deactivateNoise(){
+        noiseActive = false;
+    }
+
     // Returns the view matrix calculated using Euler Angles and the LookAt Matrix
     glm::mat4 GetViewMatrix()
     {
+        
         ProcessTransformations();
         return glm::lookAt(Position, Position + Front, Up);
     }
@@ -259,18 +273,106 @@ public:
 private:
 
     void ProcessTransformations(){
-        ProcessBSPline();
-        ProcessBezier();
+        currTime = glfwGetTime();
+        //ProcessBSPline();
+        //ProcessBezier();
         processTranslation();
 
-        ProcessRP();
+        //ProcessRP();
         ProcessRA();
 
-        ProcessLookAt();
+        //ProcessLookAt();
+        updateCameraVectors();
+    }
+
+    void ProcessRA(){
+        if(currRA.Ended){
+            if(!rotationRAQueue.empty()){
+                currRA = translationQueue.front();
+                rotationRAQueue.pop();
+
+                currRA.InicialTime = currTime;
+                currRA.FinalTime += currTime;
+                currRA.Ended = false;
+                currRA.InicialAngle = Position;
+            }
+            else 
+                return;
+        }
+
+        translation t = currRA;
+        float percentage = (currTime - t.InicialTime) / (t.FinalTime - t.InicialTime);
+
+        if(percentage >= 1){
+            percentage = 1.0f;
+            currRA.Ended = true;
+        }
+
+        this->Position = t.InicialPosition + percentage * (t.Position - t.InicialPosition);
+    }
+
+    void processTranslation(){
+        if(currTranslation.Ended){
+            if(!translationQueue.empty()){
+                currTranslation = translationQueue.front();
+                translationQueue.pop();
+
+                currTranslation.InicialTime = currTime;
+                currTranslation.FinalTime += currTime;
+                currTranslation.Ended = false;
+                currTranslation.InicialPosition = Position;
+            }
+            else 
+                return;
+        }
+
+        translation t = currTranslation;
+        float percentage = (currTime - t.InicialTime) / (t.FinalTime - t.InicialTime);
+
+        if(percentage >= 1){
+            percentage = 1.0f;
+            currTranslation.Ended = true;
+        }
+
+        this->Position = t.InicialPosition + percentage * (t.Position - t.InicialPosition);
     }
 
     void ProcessLookAt(){
-        
+        if(currLookAt.Ended){
+            if(!lookAtQueue.empty()){
+                currLookAt = lookAtQueue.front();
+                lookAtQueue.pop();
+
+                currLookAt.InicialTime = currTime;
+                currLookAt.FinalTime += currTime;
+                currLookAt.InicialPitch = Pitch;
+                currLookAt.InicialYaw = Yaw;
+
+                glm::vec3 FinalFront = glm::normalize(currLookAt.Position - Position);
+                currLookAt.FinalPitch = Pitch + glm::degrees(glm::orientedAngle(glm::vec3(FinalFront.x, Front.y, FinalFront.z), FinalFront, glm::vec3(0,1,0)));
+                currLookAt.FinalYaw = Yaw + glm::degrees(glm::orientedAngle(glm::vec2(Front.x, Front.z), glm::vec2(FinalFront.x, FinalFront.z)));
+
+                currLookAt.Ended = false;
+            }
+            else
+                return;
+        }
+
+        lookAt l = currLookAt;
+        float percentage = (currTime - l.InicialTime) / (l.FinalTime - l.InicialTime);
+        if(percentage >= 1){
+            currLookAt.Ended = true;
+            percentage = 1;
+        }
+
+        currLookAt.Ended = true;
+        Pitch = l.FinalPitch;
+        Yaw = l.FinalYaw;
+        return;
+
+        Pitch = l.InicialPitch + percentage * (l.FinalPitch - l.InicialPitch);
+        Yaw = l.InicialYaw + percentage * (l.FinalYaw - l.InicialYaw);
+
     }
 
     // Calculates the front vector from the Camera's (updated) Euler Angles
