@@ -13,8 +13,6 @@
 #include <iostream>
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
-void mouse_callback(GLFWwindow* window, double xpos, double ypos);
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow *window);
 void printCameraData();
 void changeCamera();
@@ -33,8 +31,6 @@ glm::vec3 position = glm::vec3(0,20,3);
 glm::vec3 up = glm::vec3(0,1,0);
 glm::vec3 front = glm::vec3(0,0,-1);
 float zoom = 45;
-float yaw = -90.0f;
-float pitch = 0.0f;
 float near = 0.01f;
 float far = 100.0f;
 
@@ -48,6 +44,9 @@ bool firstMouse = true;
 
 bool obj1 = false, obj2 = false, obj3 = false, obj4 = false, obj5 = false;
 bool t1 = false, t2 = false, t3 = false;
+bool ra1 = false, ra2 = false, ra3 = false;
+bool rp1 = false, rp2 = false, rp3 = false;
+bool b1 = false, s1 = false;
 
 // timing
 float deltaTime = 0.0f;
@@ -77,8 +76,6 @@ int main()
     }
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-    glfwSetCursorPosCallback(window, mouse_callback);
-    glfwSetScrollCallback(window, scroll_callback);
 
     // tell GLFW to capture our mouse
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -101,7 +98,7 @@ int main()
 
     // load models
     // -----------
-    //Model city(FileSystem::getPath("resources/objects/city/Castelia City.obj"));
+    Model city(FileSystem::getPath("resources/objects/city/Castelia City.obj"));
     Model rock(FileSystem::getPath("resources/objects/rock/rock.obj"));
     Model planet(FileSystem::getPath("resources/objects/planet/planet.obj"));
     Model cyborg(FileSystem::getPath("resources/objects/cyborg/cyborg.obj"));
@@ -144,11 +141,11 @@ int main()
 
         // render the loaded model
         glm::mat4 model = glm::mat4(1);
-        /*model = glm::translate(model, glm::vec3(0.0f, -1.75f, 0.0f)); // translate it down so it's at the center of the scene
+        model = glm::translate(model, glm::vec3(0.0f, -1.75f, 0.0f)); // translate it down so it's at the center of the scene
         model = glm::scale(model, glm::vec3(0.002f, 0.002f, 0.002f));	// it's a bit too big for our scene, so scale it down
         ourShader.setMat4("model", model);
         city.Draw(ourShader);
-        */
+        
 
         model = glm::mat4(1);
         model = glm::translate(model, glm::vec3(0, 10, -10));
@@ -184,17 +181,15 @@ int main()
 
 
 void printCameraData(){
-    printf("------------------- New camera data ------------------\n");
+    printf("----------------- New camera data ------------------\n");
     printf("| Position Value: (%f %f %f)\n", position.x, position.y, position.z);
     printf("| Up Vector Value: (%f %f %f)\n", up.x, up.y, up.z);
     printf("| Front Vector Value: (%f %f %f)\n", front.x, front.y, front.z);
     printf("| Zoom: %f\n", zoom);
     printf("| Near clipping: %f\n", near);
     printf("| Far clipping: %f\n", far);
-    printf("| Yaw: %f\n", yaw);
-    printf("| Pitch: %f\n", pitch);
 
-    printf("\n----------------- Current camera data ---------------\n");
+    printf("\n--------------- Current camera data ---------------\n");
     printf("| Number of Cameras: %u\n", numberOfCameras);
     printf("| Current camera id: %u\n", currentCamera);
     printf("| Position Value: (%f %f %f)\n", cameras[currentCamera].Position.x, cameras[currentCamera].Position.y, cameras[currentCamera].Position.z);
@@ -203,9 +198,7 @@ void printCameraData(){
     printf("| Zoom: %f\n", cameras[currentCamera].Zoom);
     printf("| Near clipping: %f\n", cameras[currentCamera].Near);
     printf("| Far clipping: %f\n", cameras[currentCamera].Far);
-    printf("| Yaw: %f\n", cameras[currentCamera].Yaw);
-    printf("| Pitch: %f\n", cameras[currentCamera].Pitch);
-    printf("-----------------------------------------------------\n");
+    printf("---------------------------------------------------\n");
 }
 
 void changeCamera() {
@@ -216,7 +209,7 @@ void changeCamera() {
 }
 
 void createCamera() {
-    Camera newCamera = Camera(position, up, yaw, pitch, zoom, near, far);
+    Camera newCamera = Camera(position, up, front, zoom, near, far);
     cameras.push_back(newCamera);
     ++numberOfCameras;
 }
@@ -262,14 +255,6 @@ void processInput(GLFWwindow *window)
         cameras[currentCamera].LookAt(glm::vec3(5, 5, 5), 8);
         obj3 = false;
     }
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        cameras[currentCamera].ProcessKeyboard(FORWARD, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        cameras[currentCamera].ProcessKeyboard(BACKWARD, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        cameras[currentCamera].ProcessKeyboard(LEFT, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        cameras[currentCamera].ProcessKeyboard(RIGHT, deltaTime);
 
     // Translate
     if (glfwGetKey(window, GLFW_KEY_T) == GLFW_PRESS)   t1 = true;
@@ -288,16 +273,66 @@ void processInput(GLFWwindow *window)
         t3 = false;
     }
 
+    // Rotate 'round Axis
+    if (glfwGetKey(window, GLFW_KEY_I) == GLFW_PRESS)   ra1 = true;
+    if (glfwGetKey(window, GLFW_KEY_O) == GLFW_PRESS)   ra2 = true;
+    if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS)   ra3 = true;
+    if (glfwGetKey(window, GLFW_KEY_I) == GLFW_RELEASE && ra1){
+        cameras[currentCamera].rotateRA(glm::vec3(0,1,0), glm::radians(30.0f), 5);
+        ra1 = false;
+    }
+    if (glfwGetKey(window, GLFW_KEY_O) == GLFW_RELEASE && ra2){
+        cameras[currentCamera].rotateRA(glm::vec3(1,0,0), glm::radians(70.0f), 5);
+        ra2 = false;
+    }
+    if (glfwGetKey(window, GLFW_KEY_P) == GLFW_RELEASE && ra3){
+        cameras[currentCamera].rotateRA(glm::vec3(1,1,1), glm::radians(90.0f), 5);
+        ra3 = false;
+    }
 
-    // Camera movement
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        cameras[currentCamera].ProcessKeyboard(FORWARD, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        cameras[currentCamera].ProcessKeyboard(BACKWARD, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        cameras[currentCamera].ProcessKeyboard(LEFT, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        cameras[currentCamera].ProcessKeyboard(RIGHT, deltaTime);
+    // Rotate 'round Point
+    if (glfwGetKey(window, GLFW_KEY_J) == GLFW_PRESS)   rp1 = true;
+    if (glfwGetKey(window, GLFW_KEY_K) == GLFW_PRESS)   rp2 = true;
+    if (glfwGetKey(window, GLFW_KEY_L) == GLFW_PRESS)   rp3 = true;
+    if (glfwGetKey(window, GLFW_KEY_J) == GLFW_RELEASE && rp1){
+        cameras[currentCamera].rotateRP(glm::vec3(0,10,-10), glm::radians(30.0f), 5);
+        rp1 = false;
+    }
+    if (glfwGetKey(window, GLFW_KEY_K) == GLFW_RELEASE && rp2){
+        cameras[currentCamera].rotateRP(glm::vec3(0,10,10), glm::radians(70.0f), 5);
+        rp2 = false;
+    }
+    if (glfwGetKey(window, GLFW_KEY_L) == GLFW_RELEASE && rp3){
+        cameras[currentCamera].rotateRP(glm::vec3(5,5,5), glm::radians(90.0f), 5);
+        rp3 = false;
+    }
+
+    // Bezier
+    if (glfwGetKey(window, GLFW_KEY_B) == GLFW_PRESS)   b1 = true;
+    if (glfwGetKey(window, GLFW_KEY_B) == GLFW_RELEASE && b1){
+        cameras[currentCamera].bezierPath(
+            glm::vec3(0,0,0),
+            glm::vec3(0,10,-10),
+            glm::vec3(0,10,10),
+            glm::vec3(5,5,5), 
+            5
+        );
+        b1 = false;
+    }
+
+    // bSpline
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)   s1 = true;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_RELEASE && s1){
+        cameras[currentCamera].bSplinePath(
+            glm::vec3(0,0,0),
+            glm::vec3(0,10,-10),
+            glm::vec3(0,10,10),
+            glm::vec3(5,5,5), 
+            5
+        );
+        s1 = false;
+    }
+
 
 
 }
@@ -311,29 +346,4 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
     glViewport(0, 0, width, height);
 }
 
-// glfw: whenever the mouse moves, this callback is called
-// -------------------------------------------------------
-void mouse_callback(GLFWwindow* window, double xpos, double ypos)
-{
-    if (firstMouse)
-    {
-        lastX = xpos;
-        lastY = ypos;
-        firstMouse = false;
-    }
 
-    float xoffset = xpos - lastX;
-    float yoffset = lastY - ypos; // reversed since y-coordinates go from bottom to top
-
-    lastX = xpos;
-    lastY = ypos;
-
-    cameras[currentCamera].ProcessMouseMovement(xoffset, yoffset);
-}
-
-// glfw: whenever the mouse scroll wheel scrolls, this callback is called
-// ----------------------------------------------------------------------
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
-{
-    cameras[currentCamera].ProcessMouseScroll(yoffset);
-}

@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/vector_angle.hpp>
+#include <glm/gtx/spline.hpp>
 #include <glm/gtc/noise.hpp>
 #include <queue>
 
@@ -12,12 +13,10 @@
 
 struct lookAt {
     glm::vec3 Position;
+    glm::vec3 InicialFront;
+    glm::vec3 FinalFront;
     float InicialTime;
     float FinalTime;
-    float InicialPitch;
-    float InicialYaw;
-    float FinalPitch;
-    float FinalYaw;
     bool Ended;
 };
 
@@ -31,33 +30,37 @@ struct translation {
 
 struct rotationRP {
     glm::vec3 Point;
-    float InicialAngle;
     float Angle;
     float InicialTime;
     float FinalTime;
+
+    glm::vec3 InicialFront;
+    glm::vec3 InicialPosition;
+    glm::vec3 InicialUp;
     bool Ended;
 };
 
 struct rotationRA {
     glm::vec3 Axis;
-    float InicialAngle;
     float Angle;
+
     float InicialTime;
     float FinalTime;
+
+    glm::vec3 InicialFront;
+    glm::vec3 InicialPosition;
+    glm::vec3 InicialUp;
+
     bool Ended;
 };
 
-struct bSpline {
-    glm::vec3 P0, P1, P2, P3;
+struct spline {
+    glm::vec3 p0;
+    glm::vec3 p1;
+    glm::vec3 p2;
+    glm::vec3 p3;
     float InicialTime;
-    float FinalTime;
-    bool Ended;
-};
-
-struct bezier {
-    glm::vec3 P0, P1, P2, P3;
-    float InicialTime;
-    float FinalTime;
+    float Time;
     bool Ended;
 };
 
@@ -70,8 +73,6 @@ enum Camera_Movement {
 };
 
 // Default camera values
-const float YAW         = -90.0f;
-const float PITCH       =  0.0f;
 const float SPEED       =  2.5f;
 const float SENSITIVITY =  0.1f;
 const float ZOOM        =  45.0f;
@@ -88,9 +89,7 @@ public:
     glm::vec3 Up;
     glm::vec3 Right;
     glm::vec3 WorldUp;
-    // Euler Angles
-    float Yaw;
-    float Pitch;
+
     // Camera options
     float MovementSpeed;
     float MouseSensitivity;
@@ -105,19 +104,19 @@ public:
     std::queue<translation> translationQueue;
     std::queue<rotationRP> rotationRPQueue;
     std::queue<rotationRA> rotationRAQueue;
-    std::queue<bSpline> bSplineQueue;
-    std::queue<bezier> bezierQueue;
+    std::queue<spline> bSplineQueue;
+    std::queue<spline> bezierQueue;
 
     lookAt currLookAt;
     translation currTranslation;
     rotationRP currRP;
     rotationRA currRA;
-    bSpline currBSpline;
-    bezier currBezier;
+    spline currBSpline;
+    spline currBezier;
 
 
     // Constructor with vectors
-    Camera(glm::vec3 position = glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f), float yaw = YAW, float pitch = PITCH, float zoom = ZOOM, float near = NEAR, float far = FAR) : MovementSpeed(SPEED), MouseSensitivity(SENSITIVITY)
+    Camera(glm::vec3 position = glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3 front = glm::vec3(0.0f, 0.0f, -1.0f), float zoom = ZOOM, float near = NEAR, float far = FAR) : MovementSpeed(SPEED), MouseSensitivity(SENSITIVITY)
     {
         currLookAt.Ended = true;
         currTranslation.Ended = true;
@@ -132,8 +131,7 @@ public:
         Zoom = zoom;
         Position = position;
         WorldUp = up;
-        Yaw = yaw;
-        Pitch = pitch;
+        Front = front;
 
         updateCameraVectors();
     }
@@ -178,41 +176,32 @@ public:
     }
 
     void bSplinePath(glm::vec3 P0, glm::vec3 P1, glm::vec3 P2, glm::vec3 P3, float time){
-        bSpline b;
-        b.P0 = P0;
-        b.P1 = P1;
-        b.P2 = P2;
-        b.P3 = P3;
-        b.FinalTime = time;
+        spline b;
+        b.p0 = P0;
+        b.p1 = P1;
+        b.p2 = P2;
+        b.p3 = P3;
+        b.Time = time;
         b.Ended = false;
 
         bSplineQueue.push(b);
     }
 
     void bezierPath(glm::vec3 P0, glm::vec3 P1, glm::vec3 P2, glm::vec3 P3, float time){
-        bezier b;
-        b.P0 = P0;
-        b.P1 = P1;
-        b.P2 = P2;
-        b.P3 = P3;
-        b.FinalTime = time;
+        spline b;
+        b.p0 = P0;
+        b.p1 = P1;
+        b.p2 = P2;
+        b.p3 = P3;
+        b.Time = time;
         b.Ended = false;
 
         bezierQueue.push(b);
     }
 
-    void activateNoise(){
-        noiseActive = true;
-    }
-
-    void deactivateNoise(){
-        noiseActive = false;
-    }
-
     // Returns the view matrix calculated using Euler Angles and the LookAt Matrix
     glm::mat4 GetViewMatrix()
     {
-        
         ProcessTransformations();
         return glm::lookAt(Position, Position + Front, Up);
     }
@@ -223,92 +212,195 @@ public:
         return glm::perspective(glm::radians(Zoom), (float)width / (float)height, Near, Far);
     }
 
-    // Processes input received from any keyboard-like input system. Accepts input parameter in the form of camera defined ENUM (to abstract it from windowing systems)
-    void ProcessKeyboard(Camera_Movement direction, float deltaTime)
-    {
-        float velocity = MovementSpeed * deltaTime;
-        if (direction == FORWARD)
-            Position += Front * velocity;
-        if (direction == BACKWARD)
-            Position -= Front * velocity;
-        if (direction == LEFT)
-            Position -= Right * velocity;
-        if (direction == RIGHT)
-            Position += Right * velocity;
-    }
-
-    // Processes input received from a mouse input system. Expects the offset value in both the x and y direction.
-    void ProcessMouseMovement(float xoffset, float yoffset, GLboolean constrainPitch = true)
-    {
-        xoffset *= MouseSensitivity;
-        yoffset *= MouseSensitivity;
-
-        Yaw   += xoffset;
-        Pitch += yoffset;
-
-        // Make sure that when pitch is out of bounds, screen doesn't get flipped
-        if (constrainPitch)
-        {
-            if (Pitch > 89.0f)
-                Pitch = 89.0f;
-            if (Pitch < -89.0f)
-                Pitch = -89.0f;
-        }
-
-        // Update Front, Right and Up Vectors using the updated Euler angles
-        updateCameraVectors();
-    }
-
-    // Processes input received from a mouse scroll-wheel event. Only requires input on the vertical wheel-axis
-    void ProcessMouseScroll(float yoffset)
-    {
-        if (Zoom >= 1.0f && Zoom <= 45.0f)
-            Zoom -= yoffset;
-        if (Zoom <= 1.0f)
-            Zoom = 1.0f;
-        if (Zoom >= 45.0f)
-            Zoom = 45.0f;
-    }
 
 private:
 
     void ProcessTransformations(){
         currTime = glfwGetTime();
-        //ProcessBSPline();
-        //ProcessBezier();
+        ProcessBSPline();
+        ProcessBezier();
         processTranslation();
 
-        //ProcessRP();
+        ProcessRP();
         ProcessRA();
 
-        //ProcessLookAt();
-        updateCameraVectors();
+        ProcessLookAt();
+    }
+
+    void ProcessBSPline(){
+        if(currBSpline.Ended){
+            if(!bSplineQueue.empty()){
+                currBSpline = bSplineQueue.front();
+                currBSpline.InicialTime = currTime;
+                currBSpline.Time += currTime;
+                currBSpline.Ended = false;
+                bSplineQueue.pop();
+            }
+            else {
+                return;
+            }
+        }
+        
+        spline b = currBSpline;
+        float percentage = (this->currTime - b.InicialTime) / (b.Time - b.InicialTime);
+        if(percentage >= 1){
+            currBSpline.Ended = true;
+            Position = b.p3;
+            return;
+        }
+
+        glm::vec3 v;
+        if(percentage <= 0.333333333){
+            v = glm::catmullRom(b.p0, b.p0, b.p1, b.p2, 3 * percentage); 
+        }
+        else{
+            if(percentage <= 0.666666666){
+                v = glm::catmullRom(b.p0, b.p1, b.p2, b.p3, 3 * (percentage - 0.333333333));    
+            }
+            else {
+                v = glm::catmullRom(b.p1, b.p2, b.p3, b.p3, 3 * (percentage - 0.666666666));    
+            }
+        }
+
+        Position = v;
+    }
+
+    glm::vec3 Bezier(spline b, float t){
+        return (float)pow(1-t, 3) * b.p0 + 
+               3 * (float)pow(1-t, 2) * t * b.p1 +
+               3 * (1-t) * (float)pow(t, 2) * b.p2 +
+               (float)pow(t, 3) * b.p3;
+    }
+
+    void ProcessBezier(){
+        if(currBezier.Ended){
+            if(!bezierQueue.empty()){
+                currBezier = bezierQueue.front();
+                currBezier.InicialTime = currTime;
+                currBezier.Time += currTime;
+                currBezier.Ended = false;
+                bezierQueue.pop();
+            }
+            else {
+                return;
+            }
+        }
+        
+        spline b = currBezier;
+        float percentage = (this->currTime - b.InicialTime) / (b.Time - b.InicialTime);
+        if(percentage >= 1){
+            currBezier.Ended = true;
+            Position = currBezier.p3;
+            return;
+        }
+        else {
+            Position = Bezier(currBezier, percentage);
+        }
     }
 
     void ProcessRA(){
-        if(currRA.Ended){
+         if(currRA.Ended){
             if(!rotationRAQueue.empty()){
-                currRA = translationQueue.front();
-                rotationRAQueue.pop();
-
+                currRA = rotationRAQueue.front();
+                currRA.Ended = false;   
                 currRA.InicialTime = currTime;
                 currRA.FinalTime += currTime;
-                currRA.Ended = false;
-                currRA.InicialAngle = Position;
+
+                currRA.InicialFront = Front;
+                currRA.InicialPosition = Position;
+                currRA.InicialUp = Up;
+                rotationRAQueue.pop(); 
             }
-            else 
+            else {
                 return;
+            }
         }
 
-        translation t = currRA;
-        float percentage = (currTime - t.InicialTime) / (t.FinalTime - t.InicialTime);
-
+        rotationRA r = currRA;
+        float percentage = (currTime - r.InicialTime) / (r.FinalTime - r.InicialTime);
         if(percentage >= 1){
-            percentage = 1.0f;
+            percentage = 1;
             currRA.Ended = true;
         }
+    
+        float angle;
+        angle = r.Angle * percentage;
+        glm::mat4 rotate;
+        rotate = glm::rotate(glm::mat4(1), angle, r.Axis);
+        
+        glm::vec4 newPosition = glm::vec4(r.InicialPosition, 1);
+        newPosition = newPosition * rotate;
+        glm::vec4 newFront = glm::vec4((r.InicialPosition + r.InicialFront), 1);
+        newFront = newFront * rotate;
+        glm::vec4 newUp = glm::vec4((r.InicialPosition + r.InicialUp), 1);
+        newUp = newUp * rotate;
 
-        this->Position = t.InicialPosition + percentage * (t.Position - t.InicialPosition);
+        Position = glm::vec3(newPosition.x, newPosition.y, newPosition.z);
+        Front = glm::vec3(newFront.x, newFront.y, newFront.z) - Position;
+        Up = glm::vec3(newUp.x, newUp.y, newUp.z) - Position;
+        Position = r.InicialPosition;
+
+        updateCameraVectors();
+
+        return;
+    }
+
+    void ProcessRP(){
+        if(currRP.Ended){
+            if(!rotationRPQueue.empty()){
+                currRP = rotationRPQueue.front();
+                currRP.Ended = false;   
+                currRP.InicialTime = currTime;
+                currRP.FinalTime += currTime;
+
+                currRP.InicialFront = Front;
+                currRP.InicialPosition = Position;
+                currRP.InicialUp = Up;
+
+                glm::vec3 newFront;
+                if(currRP.Point != Position)
+                    newFront = currRP.Point - Position;
+                else
+                    newFront = Front;
+
+                newFront = glm::normalize(newFront);
+                if(newFront != Front && (newFront + Front) != glm::vec3(0)){
+                    Up = glm::normalize(glm::cross(Front, newFront));
+                    if(Up.y <= 0.0)    
+                        Up *= -1;
+                }
+
+                rotationRPQueue.pop(); 
+
+            }
+            else {
+                return;
+            }
+        }
+        
+
+        rotationRP r = currRP;
+        float percentage = (currTime - r.InicialTime) / (r.FinalTime - r.InicialTime);
+        if(percentage >= 1){
+            percentage = 1;
+            currRP.Ended = true;
+        }
+    
+        float angle;
+        angle = r.Angle * percentage;
+        glm::mat4 rMatrix = glm::mat4(1);
+        rMatrix = glm::translate(rMatrix, r.Point);
+        rMatrix = glm::rotate(rMatrix, angle, Up);
+        rMatrix = glm::translate(rMatrix, -r.Point);
+        
+        glm::vec4 newPosition = glm::vec4(r.InicialPosition, 1);
+        newPosition = newPosition * rMatrix;
+        Position = glm::vec3(newPosition.x, newPosition.y, newPosition.z);
+
+        glm::vec4 newFront = glm::normalize(glm::vec4((r.Point - Position), 1));
+        updateCameraVectors();
+
+        return;
     }
 
     void processTranslation(){
@@ -342,48 +434,39 @@ private:
             if(!lookAtQueue.empty()){
                 currLookAt = lookAtQueue.front();
                 lookAtQueue.pop();
+                
+                if(Position == currLookAt.Position){
+                    currLookAt.Ended = true;
+                    return;
+                }
 
                 currLookAt.InicialTime = currTime;
                 currLookAt.FinalTime += currTime;
-                currLookAt.InicialPitch = Pitch;
-                currLookAt.InicialYaw = Yaw;
-
-                glm::vec3 FinalFront = glm::normalize(currLookAt.Position - Position);
-                currLookAt.FinalPitch = Pitch + glm::degrees(glm::orientedAngle(glm::vec3(FinalFront.x, Front.y, FinalFront.z), FinalFront, glm::vec3(0,1,0)));
-                currLookAt.FinalYaw = Yaw + glm::degrees(glm::orientedAngle(glm::vec2(Front.x, Front.z), glm::vec2(FinalFront.x, FinalFront.z)));
-
                 currLookAt.Ended = false;
+                currLookAt.InicialFront = Front;
+                currLookAt.FinalFront = glm::normalize(currLookAt.Position - Position);
             }
-            else
+            else 
                 return;
         }
 
-        lookAt l = currLookAt;
-        float percentage = (currTime - l.InicialTime) / (l.FinalTime - l.InicialTime);
+        lookAt t = currLookAt;
+        float percentage = (currTime - t.InicialTime) / (t.FinalTime - t.InicialTime);
+
         if(percentage >= 1){
+            percentage = 1.0f;
             currLookAt.Ended = true;
-            percentage = 1;
         }
 
-        currLookAt.Ended = true;
-        Pitch = l.FinalPitch;
-        Yaw = l.FinalYaw;
-        return;
-
-        Pitch = l.InicialPitch + percentage * (l.FinalPitch - l.InicialPitch);
-        Yaw = l.InicialYaw + percentage * (l.FinalYaw - l.InicialYaw);
+        Front = t.InicialFront + percentage * (t.FinalFront - t.InicialFront);
+        updateCameraVectors();
 
     }
 
     // Calculates the front vector from the Camera's (updated) Euler Angles
     void updateCameraVectors()
     {
-        // Calculate the new Front vector
-        glm::vec3 front;
-        front.x = cos(glm::radians(Yaw)) * cos(glm::radians(Pitch));
-        front.y = sin(glm::radians(Pitch));
-        front.z = sin(glm::radians(Yaw)) * cos(glm::radians(Pitch));
-        Front = glm::normalize(front);
+        Front = glm::normalize(Front);
         // Also re-calculate the Right and Up vector
         Right = glm::normalize(glm::cross(Front, WorldUp));  // Normalize the vectors, because their length gets closer to 0 the more you look up or down which results in slower movement.
         Up    = glm::normalize(glm::cross(Right, Front));
